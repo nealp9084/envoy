@@ -144,13 +144,13 @@ public:
    * @param headers supplies the decoded headers map.
    * @param end_stream supplies whether this is a header only request.
    */
-  virtual void decodeHeaders(HeaderMapPtr&& headers, bool end_stream) PURE;
+  virtual void decodeHeaders(RequestHeaderMapPtr&& headers, bool end_stream) PURE;
 
   /**
    * Called with a decoded trailers frame. This implicitly ends the stream.
    * @param trailers supplies the decoded trailers.
    */
-  virtual void decodeTrailers(HeaderMapPtr&& trailers) PURE;
+  virtual void decodeTrailers(RequestTrailerMapPtr&& trailers) PURE;
 };
 
 /**
@@ -165,20 +165,20 @@ public:
    * Called with decoded 100-Continue headers.
    * @param headers supplies the decoded 100-Continue headers map.
    */
-  virtual void decode100ContinueHeaders(HeaderMapPtr&& headers) PURE;
+  virtual void decode100ContinueHeaders(ResponseHeaderMapPtr&& headers) PURE;
 
   /**
    * Called with decoded headers, optionally indicating end of stream.
    * @param headers supplies the decoded headers map.
    * @param end_stream supplies whether this is a header only response.
    */
-  virtual void decodeHeaders(HeaderMapPtr&& headers, bool end_stream) PURE;
+  virtual void decodeHeaders(ResponseHeaderMapPtr&& headers, bool end_stream) PURE;
 
   /**
    * Called with a decoded trailers frame. This implicitly ends the stream.
    * @param trailers supplies the decoded trailers.
    */
-  virtual void decodeTrailers(HeaderMapPtr&& trailers) PURE;
+  virtual void decodeTrailers(ResponseTrailerMapPtr&& trailers) PURE;
 };
 
 /**

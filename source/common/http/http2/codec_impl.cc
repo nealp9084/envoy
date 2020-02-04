@@ -51,7 +51,7 @@ template <typename T> static T* remove_const(const void* object) {
 }
 
 ConnectionImpl::StreamImpl::StreamImpl(ConnectionImpl& parent, uint32_t buffer_limit)
-    : parent_(parent), headers_(new HeaderMapImpl()), local_end_stream_sent_(false),
+    : parent_(parent), local_end_stream_sent_(false),
       remote_end_stream_(false), data_deferred_(false),
       waiting_for_non_informational_headers_(false),
       pending_receive_buffer_high_watermark_called_(false),
@@ -128,8 +128,8 @@ void ConnectionImpl::StreamImpl::encodeTrailersBase(const HeaderMap& trailers) {
   if (pending_send_data_.length() > 0) {
     // In this case we want trailers to come after we release all pending body data that is
     // waiting on window updates. We need to save the trailers so that we can emit them later.
-    ASSERT(!pending_trailers_);
-    pending_trailers_ = std::make_unique<HeaderMapImpl>(trailers);
+    ASSERT(!pending_trailers_to_encode_);
+    pending_trailers_to_encode_ = std::make_unique<HeaderMapImpl>(trailers);
   } else {
     submitTrailers(trailers);
     parent_.sendPendingFrames();

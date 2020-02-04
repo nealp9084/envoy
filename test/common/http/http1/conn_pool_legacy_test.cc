@@ -187,8 +187,8 @@ struct ActiveTestRequest {
 
   void completeResponse(bool with_body) {
     // Test additional metric writes also.
-    Http::HeaderMapPtr response_headers(
-        new TestHeaderMapImpl{{":status", "200"}, {"x-envoy-upstream-canary", "true"}});
+    Http::ResponseHeaderMapPtr response_headers(
+        new TestResponseHeaderMapImpl{{":status", "200"}, {"x-envoy-upstream-canary", "true"}});
 
     inner_decoder_->decodeHeaders(std::move(response_headers), !with_body);
     if (with_body) {

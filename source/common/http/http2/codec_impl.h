@@ -208,7 +208,6 @@ protected:
     bool buffers_overrun() const { return read_disable_count_ > 0; }
 
     ConnectionImpl& parent_;
-    HeaderMapImplPtr headers_;
     int32_t stream_id_{-1};
     uint32_t unconsumed_bytes_{0};
     uint32_t read_disable_count_{0};
@@ -218,7 +217,7 @@ protected:
     Buffer::WatermarkBuffer pending_send_data_{
         [this]() -> void { this->pendingSendBufferLowWatermark(); },
         [this]() -> void { this->pendingSendBufferHighWatermark(); }};
-    HeaderMapPtr pending_trailers_;
+    HeaderMapPtr pending_trailers_to_encode_;
     std::unique_ptr<MetadataDecoder> metadata_decoder_;
     std::unique_ptr<MetadataEncoder> metadata_encoder_;
     absl::optional<StreamResetReason> deferred_reset_;
@@ -260,6 +259,9 @@ protected:
     void encodeTrailers(const HeaderMap& trailers) override { encodeTrailersBase(trailers); }
 
     ResponseDecoder& response_decoder_;
+    // TODO(mattklein123): Consider using a variant for the following two members?
+    ResponseHeaderMapPtr response_headers_;
+    ResponseTrailerMapPtr response_trailers_;
     std::string upgrade_type_;
   };
 
@@ -291,6 +293,9 @@ protected:
     void encodeTrailers(const HeaderMap& trailers) override { encodeTrailersBase(trailers); }
 
     RequestDecoder* request_decoder_{};
+    // TODO(mattklein123): Consider using a variant for the following two members?
+    RequestHeaderMapPtr request_headers_;
+    RequestTrailerMapPtr request_trailers_;
   };
 
   using ServerStreamImplPtr = std::unique_ptr<ServerStreamImpl>;

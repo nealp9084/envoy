@@ -56,7 +56,7 @@ public:                                                                         
  * paths use O(1) direct access. In general, we try to copy as little as possible and allocate as
  * little as possible in any of the paths.
  */
-class HeaderMapImpl : public HeaderMap, NonCopyable {
+class HeaderMapImpl : public virtual HeaderMap, NonCopyable {
 public:
   HeaderMapImpl();
   explicit HeaderMapImpl(

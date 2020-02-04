@@ -273,7 +273,7 @@ private:
    * @return 0 if no error, 1 if there should be no body.
    */
   int onHeadersCompleteBase();
-  virtual int onHeadersComplete(HeaderMapImplPtr&& headers) PURE;
+  virtual int onHeadersComplete() PURE;
 
   /**
    * Called when body data is received.
@@ -313,7 +313,6 @@ private:
   static http_parser_settings settings_;
   static const ToLowerTable& toLowerTable();
 
-  HeaderMapImplPtr current_header_map_;
   HeaderParsingState header_parsing_state_{HeaderParsingState::Field};
   HeaderString current_header_field_;
   HeaderString current_header_value_;
@@ -363,7 +362,7 @@ private:
   void onEncodeHeaders(const HeaderMap&) override {}
   void onMessageBegin() override;
   void onUrl(const char* data, size_t length) override;
-  int onHeadersComplete(HeaderMapImplPtr&& headers) override;
+  int onHeadersComplete() override;
   void onBody(const char* data, size_t length) override;
   void onMessageComplete(HeaderMapImplPtr&& trailers) override;
   void onResetStream(StreamResetReason reason) override;
@@ -403,7 +402,7 @@ private:
   void onEncodeHeaders(const HeaderMap& headers) override;
   void onMessageBegin() override {}
   void onUrl(const char*, size_t) override { NOT_IMPLEMENTED_GCOVR_EXCL_LINE; }
-  int onHeadersComplete(HeaderMapImplPtr&& headers) override;
+  int onHeadersComplete() override;
   void onBody(const char* data, size_t length) override;
   void onMessageComplete(HeaderMapImplPtr&& trailers) override;
   void onResetStream(StreamResetReason reason) override;

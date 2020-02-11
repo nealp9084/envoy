@@ -172,9 +172,14 @@ void HttpTracerUtility::finalizeDownstreamSpan(Span& span, const Http::HeaderMap
     span.setTag(Tracing::Tags::get().UserAgent, valueOrDefault(request_headers->UserAgent(), "-"));
     span.setTag(Tracing::Tags::get().HttpProtocol,
                 AccessLog::AccessLogFormatUtils::protocolToString(stream_info.protocol()));
-    const auto ip = stream_info.downstreamDirectRemoteAddress()->ip();
-    if (ip != nullptr) {
-      span.setTag(Tracing::Tags::get().PeerAddress, ip->addressAsString());
+
+    const auto& remoteAddress = stream_info.downstreamDirectRemoteAddress();
+    ASSERT(remoteAddress != nullptr);
+
+    if (remoteAddress->type() == Network::Address::Type::Ip) {
+      const auto remoteIP = remoteAddress->ip();
+      ASSERT(remoteIP != nullptr);
+      span.setTag(Tracing::Tags::get().PeerAddress, remoteIP->addressAsString());
     }
 
     if (request_headers->ClientTraceId()) {

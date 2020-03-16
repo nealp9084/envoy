@@ -2,12 +2,15 @@
 
 #include "envoy/event/file_event.h"
 #include "envoy/event/timer.h"
+#include "envoy/extensions/filters/listener/tls_inspector/v3/tls_inspector.pb.h"
+#include "envoy/extensions/filters/listener/tls_inspector/v3/tls_inspector.pb.validate.h"
 #include "envoy/network/filter.h"
 #include "envoy/stats/scope.h"
 #include "envoy/stats/stats_macros.h"
 
 #include "common/common/logger.h"
 
+#include "absl/container/fixed_array.h"
 #include "openssl/ssl.h"
 
 namespace Envoy {
@@ -49,11 +52,14 @@ enum class ParseState {
  */
 class Config {
 public:
-  Config(Stats::Scope& scope, uint32_t max_client_hello_size = TLS_MAX_CLIENT_HELLO);
+  Config(Stats::Scope& scope,
+         const envoy::extensions::filters::listener::tls_inspector::v3::TlsInspector& config,
+         uint32_t max_client_hello_size = TLS_MAX_CLIENT_HELLO);
 
   const TlsInspectorStats& stats() const { return stats_; }
   bssl::UniquePtr<SSL> newSsl();
   uint32_t maxClientHelloSize() const { return max_client_hello_size_; }
+  const absl::FixedArray<uint32_t>& inspected_ports() const { return inspected_ports_; }
 
   static constexpr size_t TLS_MAX_CLIENT_HELLO = 64 * 1024;
   static const unsigned TLS_MIN_SUPPORTED_VERSION;
@@ -62,6 +68,7 @@ public:
 private:
   TlsInspectorStats stats_;
   bssl::UniquePtr<SSL_CTX> ssl_ctx_;
+  const absl::FixedArray<uint32_t> inspected_ports_;
   const uint32_t max_client_hello_size_;
 };
 
@@ -83,6 +90,7 @@ private:
   void done(bool success);
   void onALPN(const unsigned char* data, unsigned int len);
   void onServername(absl::string_view name);
+  bool shouldInspect(uint32_t port) const;
 
   ConfigSharedPtr config_;
   Network::ListenerFilterCallbacks* cb_;

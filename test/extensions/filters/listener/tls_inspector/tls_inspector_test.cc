@@ -1,6 +1,14 @@
+#include <memory>
+
+#include "envoy/extensions/filters/listener/tls_inspector/v3/tls_inspector.pb.h"
+#include "envoy/network/filter.h"
+
 #include "common/network/io_socket_handle_impl.h"
+#include "common/network/utility.h"
+#include "common/protobuf/protobuf.h"
 
 #include "extensions/filters/listener/tls_inspector/tls_inspector.h"
+#include "extensions/filters/listener/tls_inspector/tls_inspector_config_factory.h"
 
 #include "test/extensions/filters/listener/tls_inspector/tls_utility.h"
 #include "test/mocks/api/mocks.h"
@@ -18,8 +26,11 @@ using testing::Invoke;
 using testing::InvokeWithoutArgs;
 using testing::NiceMock;
 using testing::ReturnNew;
+using testing::ReturnPointee;
 using testing::ReturnRef;
 using testing::SaveArg;
+
+namespace v3 = envoy::extensions::filters::listener::tls_inspector::v3;
 
 namespace Envoy {
 namespace Extensions {
@@ -30,16 +41,20 @@ namespace {
 class TlsInspectorTest : public testing::TestWithParam<std::tuple<uint16_t, uint16_t>> {
 public:
   TlsInspectorTest()
-      : cfg_(std::make_shared<Config>(store_)),
-        io_handle_(std::make_unique<Network::IoSocketHandleImpl>(42)) {}
+      : cfg_(std::make_shared<Config>(store_, defaultConfigProto())),
+        io_handle_(std::make_unique<Network::IoSocketHandleImpl>(42)),
+        local_address_(Network::Utility::parseInternetAddress("127.0.0.1", 3000)) {}
   ~TlsInspectorTest() override { io_handle_->close(); }
 
-  void init() {
-    filter_ = std::make_unique<Filter>(cfg_);
+  void init() { init(cfg_); }
+
+  void init(ConfigSharedPtr cfg) {
+    filter_ = std::make_unique<Filter>(cfg);
 
     EXPECT_CALL(cb_, socket()).WillRepeatedly(ReturnRef(socket_));
     EXPECT_CALL(cb_, dispatcher()).WillRepeatedly(ReturnRef(dispatcher_));
     EXPECT_CALL(socket_, ioHandle()).WillRepeatedly(ReturnRef(*io_handle_));
+    EXPECT_CALL(socket_, localAddress()).WillRepeatedly(ReturnPointee(&local_address_));
 
     // Prepare the first recv attempt during
     EXPECT_CALL(os_sys_calls_, recv(42, _, _, MSG_PEEK))
@@ -56,6 +71,14 @@ public:
     filter_->onAccept(cb_);
   }
 
+  static v3::TlsInspector defaultConfigProto() { return v3::TlsInspector(); }
+
+  ConfigSharedPtr makeConfigWithWhitelistedPort(uint32_t port) {
+    v3::TlsInspector proto_config = defaultConfigProto();
+    proto_config.add_inspected_ports(port);
+    return std::make_shared<Config>(store_, proto_config);
+  }
+
   NiceMock<Api::MockOsSysCalls> os_sys_calls_;
   TestThreadsafeSingletonInjector<Api::OsSysCallsImpl> os_calls_{&os_sys_calls_};
   Stats::IsolatedStoreImpl store_;
@@ -66,6 +89,7 @@ public:
   NiceMock<Event::MockDispatcher> dispatcher_;
   Event::FileReadyCb file_event_callback_;
   Network::IoHandlePtr io_handle_;
+  const Network::Address::InstanceConstSharedPtr local_address_;
 };
 
 INSTANTIATE_TEST_SUITE_P(TlsProtocolVersions, TlsInspectorTest,
@@ -78,7 +102,8 @@ INSTANTIATE_TEST_SUITE_P(TlsProtocolVersions, TlsInspectorTest,
 
 // Test that an exception is thrown for an invalid value for max_client_hello_size
 TEST_P(TlsInspectorTest, MaxClientHelloSize) {
-  EXPECT_THROW_WITH_MESSAGE(Config(store_, Config::TLS_MAX_CLIENT_HELLO + 1), EnvoyException,
+  EXPECT_THROW_WITH_MESSAGE(Config(store_, defaultConfigProto(), Config::TLS_MAX_CLIENT_HELLO + 1),
+                            EnvoyException,
                             "max_client_hello_size of 65537 is greater than maximum of 65536.");
 }
 
@@ -213,7 +238,7 @@ TEST_P(TlsInspectorTest, NoExtensions) {
 // maximum allowed size.
 TEST_P(TlsInspectorTest, ClientHelloTooBig) {
   const size_t max_size = 50;
-  cfg_ = std::make_shared<Config>(store_, static_cast<uint32_t>(max_size));
+  cfg_ = std::make_shared<Config>(store_, defaultConfigProto(), static_cast<uint32_t>(max_size));
   std::vector<uint8_t> client_hello = Tls::Test::generateClientHello(
       std::get<0>(GetParam()), std::get<1>(GetParam()), "example.com", "");
   ASSERT(client_hello.size() > max_size);
@@ -256,6 +281,7 @@ TEST_P(TlsInspectorTest, InlineReadSucceed) {
   EXPECT_CALL(cb_, socket()).WillRepeatedly(ReturnRef(socket_));
   EXPECT_CALL(cb_, dispatcher()).WillRepeatedly(ReturnRef(dispatcher_));
   EXPECT_CALL(socket_, ioHandle()).WillRepeatedly(ReturnRef(*io_handle_));
+  EXPECT_CALL(socket_, localAddress()).WillRepeatedly(ReturnPointee(&local_address_));
   const std::vector<absl::string_view> alpn_protos = {absl::string_view("h2")};
   const std::string servername("example.com");
   std::vector<uint8_t> client_hello = Tls::Test::generateClientHello(
@@ -279,6 +305,39 @@ TEST_P(TlsInspectorTest, InlineReadSucceed) {
   EXPECT_CALL(socket_, setRequestedServerName(Eq(servername)));
   EXPECT_CALL(socket_, setRequestedApplicationProtocols(alpn_protos));
   EXPECT_CALL(socket_, setDetectedTransportProtocol(absl::string_view("tls")));
+  EXPECT_EQ(Network::FilterStatus::Continue, filter_->onAccept(cb_));
+}
+
+// Test that the filter is activated when the dst port matches a port on the whitelist
+// dst port = 3000, whitelist = {3000}
+TEST_P(TlsInspectorTest, WhitelistedDstPortIsInspected) {
+  init(makeConfigWithWhitelistedPort(3000));
+  std::vector<uint8_t> data;
+
+  // Use 100 bytes of zeroes. This is not valid as a ClientHello.
+  data.resize(100);
+
+  EXPECT_CALL(os_sys_calls_, recv(42, _, _, MSG_PEEK))
+      .WillOnce(
+          Invoke([&data](os_fd_t, void* buffer, size_t length, int) -> Api::SysCallSizeResult {
+            ASSERT(length >= data.size());
+            memcpy(buffer, data.data(), data.size());
+            return Api::SysCallSizeResult{ssize_t(data.size()), 0};
+          }));
+  EXPECT_CALL(cb_, continueFilterChain(true));
+  file_event_callback_(Event::FileReadyType::Read);
+  EXPECT_EQ(1, cfg_->stats().tls_not_found_.value());
+}
+
+// Test that the filter is skipped when the dst port does not match any ports on the whitelist
+// dst port = 3000, whitelist = {9000}
+TEST_P(TlsInspectorTest, NonWhitelistedDstPortIsSkipped) {
+  filter_ = std::make_unique<Filter>(makeConfigWithWhitelistedPort(9000));
+  EXPECT_CALL(cb_, socket()).WillRepeatedly(ReturnRef(socket_));
+  EXPECT_CALL(socket_, localAddress()).WillRepeatedly(ReturnPointee(&local_address_));
+
+  EXPECT_CALL(os_sys_calls_, recv(_, _, _, MSG_PEEK)).Times(0);
+  EXPECT_CALL(cb_, continueFilterChain(true)).Times(0);
   EXPECT_EQ(Network::FilterStatus::Continue, filter_->onAccept(cb_));
 }
 

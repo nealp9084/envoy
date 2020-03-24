@@ -1,10 +1,13 @@
 #include <vector>
 
+#include "envoy/extensions/filters/listener/tls_inspector/v3/tls_inspector.pb.h"
+
 #include "common/api/os_sys_calls_impl.h"
 #include "common/network/io_socket_handle_impl.h"
 #include "common/network/listen_socket_impl.h"
 
 #include "extensions/filters/listener/tls_inspector/tls_inspector.h"
+#include "extensions/filters/listener/tls_inspector/tls_inspector_config_factory.h"
 
 #include "test/extensions/filters/listener/tls_inspector/tls_utility.h"
 #include "test/mocks/api/mocks.h"
@@ -17,6 +20,8 @@
 #include "openssl/ssl.h"
 
 using testing::NiceMock;
+
+namespace v3 = envoy::extensions::filters::listener::tls_inspector::v3;
 
 namespace Envoy {
 namespace Extensions {
@@ -72,9 +77,11 @@ static void BM_TlsInspector(benchmark::State& state) {
       "\x02h2\x08http/1.1"));
   TestThreadsafeSingletonInjector<Api::OsSysCallsImpl> os_calls{&os_sys_calls};
   NiceMock<Stats::MockStore> store;
-  ConfigSharedPtr cfg(std::make_shared<Config>(store));
+  const auto& proto_config = v3::TlsInspector();
+  const auto local_address = Network::Utility::parseInternetAddress("127.0.0.1", 3000);
+  ConfigSharedPtr cfg(std::make_shared<Config>(store, proto_config));
   Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>();
-  Network::ConnectionSocketImpl socket(std::move(io_handle), nullptr, nullptr);
+  Network::ConnectionSocketImpl socket(std::move(io_handle), local_address, nullptr);
   NiceMock<FastMockDispatcher> dispatcher;
   FastMockListenerFilterCallbacks cb(socket, dispatcher);
 

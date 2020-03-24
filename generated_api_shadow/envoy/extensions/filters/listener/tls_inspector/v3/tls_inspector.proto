@@ -4,6 +4,8 @@ package envoy.extensions.filters.listener.tls_inspector.v3;
 
 import "udpa/annotations/versioning.proto";
 
+import "validate/validate.proto";
+
 option java_package = "io.envoyproxy.envoy.extensions.filters.listener.tls_inspector.v3";
 option java_outer_classname = "TlsInspectorProto";
 option java_multiple_files = true;
@@ -15,4 +17,10 @@ option java_multiple_files = true;
 message TlsInspector {
   option (udpa.annotations.versioning).previous_message_type =
       "envoy.config.filter.listener.tls_inspector.v2.TlsInspector";
+
+  // Inspect only the traffic going toward these ports.
+  // If no ports are specified, then all traffic will be inspected.
+  // This will be removed in a future AppMesh Envoy release.
+  // [#not-implemented-hide:]
+  repeated uint32 inspected_ports = 1;
 }

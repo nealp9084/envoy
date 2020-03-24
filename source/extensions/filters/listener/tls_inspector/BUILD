@@ -26,12 +26,14 @@ envoy_cc_library(
         "//source/common/common:assert_lib",
         "//source/common/common:minimal_logger_lib",
         "//source/extensions/transport_sockets:well_known_names",
+        "@envoy_api//envoy/extensions/filters/listener/tls_inspector/v3:pkg_cc_proto",
     ],
 )
 
 envoy_cc_extension(
     name = "config",
-    srcs = ["config.cc"],
+    srcs = ["tls_inspector_config_factory.cc"],
+    hdrs = ["tls_inspector_config_factory.h"],
     security_posture = "robust_to_untrusted_downstream",
     deps = [
         "//include/envoy/registry",

@@ -19,12 +19,14 @@ envoy_cc_test(
     srcs = ["tls_inspector_test.cc"],
     deps = [
         ":tls_utility_lib",
+        "//source/common/network:utility_lib",
         "//source/extensions/filters/listener/tls_inspector:config",
         "//source/extensions/filters/listener/tls_inspector:tls_inspector_lib",
         "//test/mocks/api:api_mocks",
         "//test/mocks/network:network_mocks",
         "//test/mocks/stats:stats_mocks",
         "//test/test_common:threadsafe_singleton_injector_lib",
+        "@envoy_api//envoy/extensions/filters/listener/tls_inspector/v3:pkg_cc_proto",
     ],
 )
 
@@ -38,11 +40,13 @@ envoy_extension_cc_benchmark_binary(
     deps = [
         ":tls_utility_lib",
         "//source/common/network:listen_socket_lib",
+        "//source/extensions/filters/listener/tls_inspector:config",
         "//source/extensions/filters/listener/tls_inspector:tls_inspector_lib",
         "//test/mocks/api:api_mocks",
         "//test/mocks/network:network_mocks",
         "//test/mocks/stats:stats_mocks",
         "//test/test_common:threadsafe_singleton_injector_lib",
+        "@envoy_api//envoy/extensions/filters/listener/tls_inspector/v3:pkg_cc_proto",
     ],
 )
 

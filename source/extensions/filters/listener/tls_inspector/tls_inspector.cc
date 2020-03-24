@@ -7,6 +7,7 @@
 #include "envoy/common/exception.h"
 #include "envoy/common/platform.h"
 #include "envoy/event/dispatcher.h"
+#include "envoy/extensions/filters/listener/tls_inspector/v3/tls_inspector.pb.h"
 #include "envoy/network/listen_socket.h"
 #include "envoy/stats/scope.h"
 
@@ -15,6 +16,7 @@
 
 #include "extensions/transport_sockets/well_known_names.h"
 
+#include "absl/container/fixed_array.h"
 #include "openssl/ssl.h"
 
 namespace Envoy {
@@ -26,9 +28,12 @@ namespace TlsInspector {
 const unsigned Config::TLS_MIN_SUPPORTED_VERSION = TLS1_VERSION;
 const unsigned Config::TLS_MAX_SUPPORTED_VERSION = TLS1_3_VERSION;
 
-Config::Config(Stats::Scope& scope, uint32_t max_client_hello_size)
+Config::Config(Stats::Scope& scope,
+               const envoy::extensions::filters::listener::tls_inspector::v3::TlsInspector& config,
+               uint32_t max_client_hello_size)
     : stats_{ALL_TLS_INSPECTOR_STATS(POOL_COUNTER_PREFIX(scope, "tls_inspector."))},
       ssl_ctx_(SSL_CTX_new(TLS_with_buffers_method())),
+      inspected_ports_(config.inspected_ports().begin(), config.inspected_ports().end()),
       max_client_hello_size_(max_client_hello_size) {
 
   if (max_client_hello_size_ > TLS_MAX_CLIENT_HELLO) {
@@ -80,6 +85,13 @@ Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
   ASSERT(file_event_ == nullptr);
   cb_ = &cb;
 
+  uint32_t port = socket.localAddress()->ip()->port();
+
+  if (!shouldInspect(port)) {
+    ENVOY_LOG(debug, "tls inspector: skip connection to port {}", port);
+    return Network::FilterStatus::Continue;
+  }
+
   ParseState parse_state = onRead();
   switch (parse_state) {
   case ParseState::Error:
@@ -119,6 +131,12 @@ Network::FilterStatus Filter::onAccept(Network::ListenerFilterCallbacks& cb) {
     return Network::FilterStatus::StopIteration;
   }
   NOT_REACHED_GCOVR_EXCL_LINE;
+}
+
+bool Filter::shouldInspect(uint32_t port) const {
+  const auto& whitelist = config_->inspected_ports();
+  return whitelist.empty() ||
+         std::find(whitelist.begin(), whitelist.end(), port) != whitelist.end();
 }
 
 void Filter::onALPN(const unsigned char* data, unsigned int len) {
